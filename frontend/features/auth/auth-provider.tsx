@@ -44,7 +44,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async acceptTokens(tokens) {
         setTokens(tokens.access_token, tokens.refresh_token);
         setHasToken(true);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.me });
+        const user = await queryClient.fetchQuery({
+          queryKey: queryKeys.me,
+          queryFn: api.me,
+          staleTime: 20_000
+        });
+        queryClient.setQueryData(queryKeys.me, user);
       },
       logout() {
         clearTokens();
