@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     environment: str = "local"
     api_v1_prefix: str = "/api/v1"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    cors_origin_regex: str | None = None
 
     database_url: str = "postgresql+asyncpg://unimind:unimind@localhost:5432/unimind"
 
