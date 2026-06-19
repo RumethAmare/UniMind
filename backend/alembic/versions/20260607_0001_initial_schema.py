@@ -21,16 +21,17 @@ def upgrade() -> None:
         Path(__file__).parents[3] / "database" / "init" / "001_initial_schema.sql",
     ]
     schema_path = next(path for path in candidates if path.exists())
-    op.execute(schema_path.read_text())
+    op.get_bind().exec_driver_sql(schema_path.read_text())
 
 
 def downgrade() -> None:
-    op.execute("DROP TABLE IF EXISTS refresh_tokens CASCADE")
-    op.execute("DROP TABLE IF EXISTS study_artifacts CASCADE")
-    op.execute("DROP TABLE IF EXISTS chat_messages CASCADE")
-    op.execute("DROP TABLE IF EXISTS chat_sessions CASCADE")
-    op.execute("DROP TABLE IF EXISTS document_chunks CASCADE")
-    op.execute("DROP TABLE IF EXISTS documents CASCADE")
-    op.execute("DROP TABLE IF EXISTS courses CASCADE")
-    op.execute("DROP TABLE IF EXISTS users CASCADE")
-    op.execute("DROP FUNCTION IF EXISTS set_updated_at CASCADE")
+    bind = op.get_bind()
+    bind.exec_driver_sql("DROP TABLE IF EXISTS refresh_tokens CASCADE")
+    bind.exec_driver_sql("DROP TABLE IF EXISTS study_artifacts CASCADE")
+    bind.exec_driver_sql("DROP TABLE IF EXISTS chat_messages CASCADE")
+    bind.exec_driver_sql("DROP TABLE IF EXISTS chat_sessions CASCADE")
+    bind.exec_driver_sql("DROP TABLE IF EXISTS document_chunks CASCADE")
+    bind.exec_driver_sql("DROP TABLE IF EXISTS documents CASCADE")
+    bind.exec_driver_sql("DROP TABLE IF EXISTS courses CASCADE")
+    bind.exec_driver_sql("DROP TABLE IF EXISTS users CASCADE")
+    bind.exec_driver_sql("DROP FUNCTION IF EXISTS set_updated_at CASCADE")
