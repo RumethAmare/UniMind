@@ -7,22 +7,24 @@ import { AppShell } from "@/components/app-shell";
 import { AuthGuard } from "@/components/auth-guard";
 import { CitationDrawer } from "@/components/citation-drawer";
 import { Button, Panel, Select, Textarea } from "@/components/ui";
+import { useAuth } from "@/features/auth/auth-provider";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/query/keys";
 import type { SourceCitation } from "@/types/api";
 
 export default function ChatPage() {
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [latestSources, setLatestSources] = useState<SourceCitation[]>([]);
-  const sessions = useQuery({ queryKey: queryKeys.chatSessions, queryFn: api.listChatSessions });
+  const sessions = useQuery({ queryKey: queryKeys.chatSessions, queryFn: api.listChatSessions, enabled: isAuthenticated });
   const messages = useQuery({
     queryKey: queryKeys.chatMessages(selectedSessionId),
     queryFn: () => api.listMessages(selectedSessionId as string),
-    enabled: Boolean(selectedSessionId)
+    enabled: isAuthenticated && Boolean(selectedSessionId)
   });
-  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses });
+  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses, enabled: isAuthenticated });
   const [courseId, setCourseId] = useState("");
 
   useEffect(() => {

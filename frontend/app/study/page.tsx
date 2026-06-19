@@ -6,6 +6,7 @@ import { useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { AuthGuard } from "@/components/auth-guard";
 import { Button, Panel, Select } from "@/components/ui";
+import { useAuth } from "@/features/auth/auth-provider";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/query/keys";
 import type { StudyArtifactRead } from "@/types/api";
@@ -13,12 +14,13 @@ import type { StudyArtifactRead } from "@/types/api";
 type StudyKind = "summary" | "flashcards" | "mcqs" | "guide";
 
 export default function StudyPage() {
+  const { isAuthenticated } = useAuth();
   const [kind, setKind] = useState<StudyKind>("summary");
   const [courseId, setCourseId] = useState("");
   const [documentId, setDocumentId] = useState("");
   const [artifact, setArtifact] = useState<StudyArtifactRead | null>(null);
-  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses });
-  const documents = useQuery({ queryKey: queryKeys.documents, queryFn: api.listDocuments });
+  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses, enabled: isAuthenticated });
+  const documents = useQuery({ queryKey: queryKeys.documents, queryFn: api.listDocuments, enabled: isAuthenticated });
 
   const generate = useMutation({
     mutationFn: () =>

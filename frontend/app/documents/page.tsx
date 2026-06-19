@@ -7,16 +7,23 @@ import { AppShell } from "@/components/app-shell";
 import { AuthGuard } from "@/components/auth-guard";
 import { StatusBadge } from "@/components/status-badge";
 import { Button, Input, Panel, Select } from "@/components/ui";
+import { useAuth } from "@/features/auth/auth-provider";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/query/keys";
 
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [courseId, setCourseId] = useState("");
-  const docs = useQuery({ queryKey: queryKeys.documents, queryFn: api.listDocuments, refetchInterval: 6000 });
-  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses });
+  const docs = useQuery({
+    queryKey: queryKeys.documents,
+    queryFn: api.listDocuments,
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? 6000 : false
+  });
+  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses, enabled: isAuthenticated });
 
   const upload = useMutation({
     mutationFn: () => {

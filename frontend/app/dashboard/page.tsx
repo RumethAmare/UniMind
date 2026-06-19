@@ -7,13 +7,15 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { AuthGuard } from "@/components/auth-guard";
 import { Panel } from "@/components/ui";
+import { useAuth } from "@/features/auth/auth-provider";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/query/keys";
 
 export default function DashboardPage() {
-  const docs = useQuery({ queryKey: queryKeys.documents, queryFn: api.listDocuments });
-  const chats = useQuery({ queryKey: queryKeys.chatSessions, queryFn: api.listChatSessions });
-  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses });
+  const { isAuthenticated } = useAuth();
+  const docs = useQuery({ queryKey: queryKeys.documents, queryFn: api.listDocuments, enabled: isAuthenticated });
+  const chats = useQuery({ queryKey: queryKeys.chatSessions, queryFn: api.listChatSessions, enabled: isAuthenticated });
+  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses, enabled: isAuthenticated });
   const health = useQuery({ queryKey: queryKeys.health, queryFn: api.health, refetchInterval: 30000 });
 
   return (

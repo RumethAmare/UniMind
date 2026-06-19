@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type React from "react";
-import { api } from "@/lib/api/client";
+import { api, ApiError } from "@/lib/api/client";
 import { clearTokens, getAccessToken, setTokens } from "@/lib/auth/tokens";
 import { queryKeys } from "@/lib/query/keys";
 import type { TokenPair, UserRead } from "@/types/api";
@@ -24,8 +24,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const meQuery = useQuery({
     queryKey: queryKeys.me,
     queryFn: api.me,
-    enabled: hasToken
+    enabled: hasToken,
+    retry: false
   });
+
+  useEffect(() => {
+    if (meQuery.error instanceof ApiError && meQuery.error.status === 401) {
+      clearTokens();
+      setHasToken(false);
+      queryClient.clear();
+    }
+  }, [meQuery.error, queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
