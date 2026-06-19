@@ -33,15 +33,17 @@ services:
       - key: QDRANT_COLLECTION
         value: unimind_chunks
       - key: EMBEDDING_PROVIDER
-        value: openai
+        value: gemini
       - key: EMBEDDING_MODEL
-        value: text-embedding-3-small
+        value: gemini-embedding-001
       - key: EMBEDDING_DIMENSION
         value: 768
-      - key: OPENAI_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-4o-mini
+      - key: GEMINI_MODEL
+        value: gemini-2.5-pro
+      - key: GEMINI_API_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta
       - key: RAG_TOP_K
         value: 5
       - key: RAG_MIN_SCORE

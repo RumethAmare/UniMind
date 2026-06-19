@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.db.models import DocumentChunk
 from app.db.repositories import ChunkRepository
 from app.infrastructure.embeddings import EmbeddingProvider
-from app.infrastructure.llm import OpenAIProvider
+from app.infrastructure.llm import create_llm_provider
 from app.infrastructure.qdrant import QdrantVectorStore
 
 NO_CONTEXT_ANSWER = "I could not find enough relevant information in the uploaded materials."
@@ -169,13 +169,13 @@ class RagService:
         session: AsyncSession,
         embeddings: EmbeddingProvider | None = None,
         vector_store: QdrantVectorStore | None = None,
-        llm: OpenAIProvider | None = None,
+        llm=None,
         context_builder: ContextBuilder | None = None,
     ):
         self.session = session
         self.embeddings = embeddings or EmbeddingProvider()
         self.vector_store = vector_store or QdrantVectorStore()
-        self.llm = llm or OpenAIProvider()
+        self.llm = llm or create_llm_provider()
         self.chunks = ChunkRepository(session)
         self.retriever = RagRetriever(self.chunks, self.embeddings, self.vector_store)
         self.context_builder = context_builder or ContextBuilder()

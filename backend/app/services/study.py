@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.errors import AppError
 from app.db.repositories import ChunkRepository, StudyRepository
 from app.domain.enums import ArtifactType
-from app.infrastructure.llm import OpenAIProvider
+from app.infrastructure.llm import create_llm_provider
 
 
 class StudyService:
@@ -14,7 +14,7 @@ class StudyService:
         self.session = session
         self.chunks = ChunkRepository(session)
         self.artifacts = StudyRepository(session)
-        self.llm = OpenAIProvider()
+        self.llm = create_llm_provider()
 
     async def generate(
         self,
@@ -52,4 +52,3 @@ class StudyService:
             ArtifactType.STUDY_GUIDE: "Create key concepts, definitions, formulas, and exam revision notes.",
         }
         return f"{instructions[artifact_type]}\n\nContent:\n{context[:20000]}\n\nJSON only."
-

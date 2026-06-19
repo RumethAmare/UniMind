@@ -25,13 +25,16 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_collection: str = "unimind_chunks"
 
-    embedding_provider: str = "openai"
-    embedding_model: str = "text-embedding-3-small"
+    embedding_provider: str = "gemini"
+    embedding_model: str = "gemini-embedding-001"
     embedding_dimension: int = 768
     local_embedding_model: str = "BAAI/bge-base-en-v1.5"
 
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-pro"
+    gemini_api_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
 
     chunk_size: int = 500
     chunk_overlap: int = 100
