@@ -1,20 +1,21 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    password_bytes = password.encode("utf-8")
+    return bcrypt.hashpw(password_bytes, bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return pwd_context.verify(password, password_hash)
+    password_bytes = password.encode("utf-8")
+    hash_bytes = password_hash.encode("utf-8")
+    return bcrypt.checkpw(password_bytes, hash_bytes)
 
 
 def create_access_token(user_id: UUID) -> str:
@@ -37,4 +38,3 @@ def decode_token(token: str, expected_type: str) -> UUID:
     if payload.get("type") != expected_type:
         raise ValueError("Invalid token type")
     return UUID(payload["sub"])
-
