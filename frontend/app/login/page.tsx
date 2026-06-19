@@ -12,12 +12,12 @@ import { api } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/auth-provider";
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8)
+  email: z.string().email("Enter a valid email address."),
+  password: z.string().min(8, "Password must be at least 8 characters.")
 });
 
 const registerSchema = loginSchema.extend({
-  full_name: z.string().min(1)
+  full_name: z.string().min(1, "Enter your full name.")
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
@@ -59,10 +59,10 @@ export default function LoginPage() {
 
         <Panel className="p-4">
           <div className="mb-4 grid grid-cols-2 gap-2">
-            <Button variant={mode === "login" ? "primary" : "secondary"} onClick={() => setMode("login")}>
+            <Button type="button" variant={mode === "login" ? "primary" : "secondary"} onClick={() => setMode("login")}>
               <LogIn size={16} /> Login
             </Button>
-            <Button variant={mode === "register" ? "primary" : "secondary"} onClick={() => setMode("register")}>
+            <Button type="button" variant={mode === "register" ? "primary" : "secondary"} onClick={() => setMode("register")}>
               <UserPlus size={16} /> Register
             </Button>
           </div>
@@ -72,17 +72,55 @@ export default function LoginPage() {
             onSubmit={onSubmit}
           >
             {mode === "register" ? (
-              <Input placeholder="Full name" {...registerForm.register("full_name")} />
+              <FieldError message={registerForm.formState.errors.full_name?.message}>
+                <Input
+                  placeholder="Full name"
+                  aria-invalid={Boolean(registerForm.formState.errors.full_name)}
+                  {...registerForm.register("full_name")}
+                />
+              </FieldError>
             ) : null}
             {mode === "login" ? (
               <>
-                <Input placeholder="Email" type="email" autoComplete="email" {...loginForm.register("email")} />
-                <Input placeholder="Password" type="password" autoComplete="current-password" {...loginForm.register("password")} />
+                <FieldError message={loginForm.formState.errors.email?.message}>
+                  <Input
+                    placeholder="Email"
+                    type="email"
+                    autoComplete="email"
+                    aria-invalid={Boolean(loginForm.formState.errors.email)}
+                    {...loginForm.register("email")}
+                  />
+                </FieldError>
+                <FieldError message={loginForm.formState.errors.password?.message}>
+                  <Input
+                    placeholder="Password"
+                    type="password"
+                    autoComplete="current-password"
+                    aria-invalid={Boolean(loginForm.formState.errors.password)}
+                    {...loginForm.register("password")}
+                  />
+                </FieldError>
               </>
             ) : (
               <>
-                <Input placeholder="Email" type="email" autoComplete="email" {...registerForm.register("email")} />
-                <Input placeholder="Password" type="password" autoComplete="new-password" {...registerForm.register("password")} />
+                <FieldError message={registerForm.formState.errors.email?.message}>
+                  <Input
+                    placeholder="Email"
+                    type="email"
+                    autoComplete="email"
+                    aria-invalid={Boolean(registerForm.formState.errors.email)}
+                    {...registerForm.register("email")}
+                  />
+                </FieldError>
+                <FieldError message={registerForm.formState.errors.password?.message}>
+                  <Input
+                    placeholder="Password"
+                    type="password"
+                    autoComplete="new-password"
+                    aria-invalid={Boolean(registerForm.formState.errors.password)}
+                    {...registerForm.register("password")}
+                  />
+                </FieldError>
               </>
             )}
             {authMutation.error ? <p className="text-sm text-red-600">{authMutation.error.message}</p> : null}
@@ -93,5 +131,14 @@ export default function LoginPage() {
         </Panel>
       </div>
     </main>
+  );
+}
+
+function FieldError({ children, message }: { children: React.ReactNode; message?: string }) {
+  return (
+    <div className="space-y-1">
+      {children}
+      {message ? <p className="text-xs text-red-600">{message}</p> : null}
+    </div>
   );
 }
