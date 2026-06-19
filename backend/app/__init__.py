@@ -1,0 +1,2 @@
+"""UniMind backend application."""
+
