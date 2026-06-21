@@ -41,7 +41,7 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-2.5-pro
+        value: gemini-2.5-flash
       - key: GEMINI_API_BASE_URL
         value: https://generativelanguage.googleapis.com/v1beta
       - key: RAG_TOP_K

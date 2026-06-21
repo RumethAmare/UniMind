@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-pro"
+    gemini_model: str = "gemini-2.5-flash"
     gemini_api_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
 
     chunk_size: int = 500
