@@ -62,7 +62,11 @@ class StudyService:
         instructions = {
             ArtifactType.SUMMARY: "Create a structured summary with key ideas and revision notes.",
             ArtifactType.FLASHCARDS: "Create flashcards as {'flashcards':[{'question':'','answer':''}]}",
-            ArtifactType.MCQS: "Create 10 MCQs as {'mcqs':[{'question':'','options':[],'correct_answer':'','explanation':''}]}",
+            ArtifactType.MCQS: (
+                "Create exactly 10 MCQs as {'mcqs':[{'question':'','options':['','','',''],"
+                "'correct_answer':'','explanation':''}]}. Each question must have exactly four unique "
+                "non-empty options. correct_answer must exactly match one option. Keep explanations concise."
+            ),
             ArtifactType.STUDY_GUIDE: "Create key concepts, definitions, formulas, and exam revision notes.",
         }
         return f"{instructions[artifact_type]}\n\nContent:\n{context[:20000]}\n\nJSON only."

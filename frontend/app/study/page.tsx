@@ -7,6 +7,7 @@ import { AppShell } from "@/components/app-shell";
 import { AuthGuard } from "@/components/auth-guard";
 import { Button, Panel, Select } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
+import { InteractiveMcqs, type McqQuestion } from "@/features/study/interactive-mcqs";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/query/keys";
 import type { StudyArtifactRead, StudyArtifactSummary } from "@/types/api";
@@ -182,6 +183,7 @@ export default function StudyPage() {
 
 function StudyResult({ artifact }: { artifact: StudyArtifactRead | null }) {
   if (!artifact) return <Panel className="p-6 text-sm text-neutral-500">No generated study material yet.</Panel>;
+  const mcqs = artifact.artifact_type === "mcqs" ? readMcqs(artifact.content) : null;
 
   return (
     <Panel className="p-4">
@@ -189,9 +191,29 @@ function StudyResult({ artifact }: { artifact: StudyArtifactRead | null }) {
         <h2 className="text-lg font-semibold">{artifact.title}</h2>
         <p className="text-xs text-neutral-500">{artifact.artifact_type}</p>
       </div>
-      <JsonValue value={artifact.content} />
+      {mcqs ? <InteractiveMcqs key={artifact.id} mcqs={mcqs} /> : <JsonValue value={artifact.content} />}
     </Panel>
   );
+}
+
+function readMcqs(content: Record<string, unknown>): McqQuestion[] | null {
+  const value = content.mcqs;
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const mcqs = value.filter((item): item is McqQuestion => {
+    if (!item || typeof item !== "object") return false;
+    const question = item as Partial<McqQuestion>;
+    return (
+      typeof question.question === "string" &&
+      Array.isArray(question.options) &&
+      question.options.length === 4 &&
+      question.options.every((option) => typeof option === "string" && option.trim()) &&
+      new Set(question.options).size === 4 &&
+      typeof question.correct_answer === "string" &&
+      question.options.includes(question.correct_answer) &&
+      typeof question.explanation === "string"
+    );
+  });
+  return mcqs.length === value.length ? mcqs : null;
 }
 
 function JsonValue({ value }: { value: unknown }) {
