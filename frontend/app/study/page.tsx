@@ -1,26 +1,53 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { WandSparkles } from "lucide-react";
-import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trash2, WandSparkles, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { AuthGuard } from "@/components/auth-guard";
 import { Button, Panel, Select } from "@/components/ui";
 import { useAuth } from "@/features/auth/auth-provider";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/query/keys";
-import type { StudyArtifactRead } from "@/types/api";
+import type { StudyArtifactRead, StudyArtifactSummary } from "@/types/api";
 
 type StudyKind = "summary" | "flashcards" | "mcqs" | "guide";
 
+function scopeLabel(item: StudyArtifactSummary, courses: { id: string; name: string }[], documents: { id: string; title: string }[]) {
+  const documentName = documents.find((document) => document.id === item.document_id)?.title;
+  if (documentName) return documentName;
+  const courseName = courses.find((course) => course.id === item.course_id)?.name;
+  return courseName ?? "All materials";
+}
+
 export default function StudyPage() {
+  const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const [kind, setKind] = useState<StudyKind>("summary");
   const [courseId, setCourseId] = useState("");
   const [documentId, setDocumentId] = useState("");
-  const [artifact, setArtifact] = useState<StudyArtifactRead | null>(null);
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StudyArtifactSummary | null>(null);
   const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses, enabled: isAuthenticated });
   const documents = useQuery({ queryKey: queryKeys.documents, queryFn: api.listDocuments, enabled: isAuthenticated });
+  const artifacts = useQuery({ queryKey: queryKeys.studyArtifacts, queryFn: api.listStudyArtifacts, enabled: isAuthenticated });
+  const selectedArtifactExists = Boolean(
+    selectedArtifactId && artifacts.data?.some((item) => item.id === selectedArtifactId)
+  );
+  const artifact = useQuery({
+    queryKey: queryKeys.studyArtifact(selectedArtifactId),
+    queryFn: () => api.getStudyArtifact(selectedArtifactId as string),
+    enabled: isAuthenticated && selectedArtifactExists
+  });
+
+  useEffect(() => {
+    if (!artifacts.data) return;
+    if (selectedArtifactId && !artifacts.data.some((item) => item.id === selectedArtifactId)) {
+      setSelectedArtifactId(artifacts.data[0]?.id ?? null);
+      return;
+    }
+    if (!selectedArtifactId && artifacts.data[0]) setSelectedArtifactId(artifacts.data[0].id);
+  }, [artifacts.data, selectedArtifactId]);
 
   const generate = useMutation({
     mutationFn: () =>
@@ -28,19 +55,71 @@ export default function StudyPage() {
         course_id: courseId || null,
         document_id: documentId || null
       }),
-    onSuccess: setArtifact
+    async onSuccess(result) {
+      queryClient.setQueryData(queryKeys.studyArtifact(result.id), result);
+      setSelectedArtifactId(result.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.studyArtifacts });
+    }
+  });
+
+  const deleteArtifact = useMutation({
+    mutationFn: api.deleteStudyArtifact,
+    async onSuccess(_, artifactId) {
+      const nextArtifact = (artifacts.data ?? []).find((item) => item.id !== artifactId);
+      setSelectedArtifactId(nextArtifact?.id ?? null);
+      setDeleteTarget(null);
+      queryClient.removeQueries({ queryKey: queryKeys.studyArtifact(artifactId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.studyArtifacts });
+    }
   });
 
   return (
     <AuthGuard>
       <AppShell>
-        <div className="space-y-6">
-          <div>
-            <h1 className="text-2xl font-semibold">Study Tools</h1>
-            <p className="text-sm text-neutral-500">Generate summaries, flashcards, MCQs, and revision guides.</p>
-          </div>
+        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <Panel className="p-3">
+            <h2 className="mb-3 text-sm font-semibold">Saved sessions</h2>
+            <div className="space-y-1">
+              {(artifacts.data ?? []).map((item) => (
+                <div
+                  key={item.id}
+                  className={`flex items-center rounded-md transition ${
+                    selectedArtifactId === item.id
+                      ? "bg-ink text-white dark:bg-white dark:text-ink"
+                      : "hover:bg-black/5 dark:hover:bg-white/10"
+                  }`}
+                >
+                  <button className="min-w-0 flex-1 px-3 py-2 text-left" onClick={() => setSelectedArtifactId(item.id)}>
+                    <span className="block truncate text-sm">{item.title}</span>
+                    <span className="block truncate text-xs opacity-70">
+                      {item.artifact_type.replace("_", " ")} · {new Date(item.created_at).toLocaleDateString()}
+                    </span>
+                    <span className="block truncate text-xs opacity-70">
+                      {scopeLabel(item, courses.data ?? [], documents.data ?? [])}
+                    </span>
+                  </button>
+                  <Button
+                    className="mr-1 h-8 w-8 shrink-0 px-0"
+                    variant="ghost"
+                    aria-label={`Delete ${item.title}`}
+                    title="Delete session"
+                    onClick={() => setDeleteTarget(item)}
+                  >
+                    <Trash2 size={15} />
+                  </Button>
+                </div>
+              ))}
+              {(artifacts.data ?? []).length === 0 ? <p className="px-2 py-3 text-sm text-neutral-500">No saved sessions.</p> : null}
+            </div>
+          </Panel>
 
-          <Panel className="p-4">
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-2xl font-semibold">Study Tools</h1>
+              <p className="text-sm text-neutral-500">Generate summaries, flashcards, MCQs, and revision guides.</p>
+            </div>
+
+            <Panel className="p-4">
             <div className="grid gap-3 md:grid-cols-4">
               <Select value={kind} onChange={(event) => setKind(event.target.value as StudyKind)}>
                 <option value="summary">Summary</option>
@@ -69,10 +148,33 @@ export default function StudyPage() {
               </Button>
             </div>
             {generate.error ? <p className="mt-3 text-sm text-red-600">{generate.error.message}</p> : null}
-          </Panel>
+            </Panel>
 
-          <StudyResult artifact={artifact} />
+            <StudyResult artifact={artifact.data ?? null} />
+          </div>
         </div>
+        {deleteTarget ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
+            <Panel className="w-full max-w-sm p-4" role="dialog" aria-modal="true" aria-labelledby="delete-study-title">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 id="delete-study-title" className="text-base font-semibold">Delete session?</h2>
+                  <p className="mt-2 text-sm text-neutral-500">This permanently removes “{deleteTarget.title}”.</p>
+                </div>
+                <Button className="h-8 w-8 px-0" variant="ghost" aria-label="Close confirmation" onClick={() => setDeleteTarget(null)}>
+                  <X size={16} />
+                </Button>
+              </div>
+              {deleteArtifact.error ? <p className="mt-3 text-sm text-red-600">{deleteArtifact.error.message}</p> : null}
+              <div className="mt-4 flex justify-end gap-2">
+                <Button variant="secondary" onClick={() => setDeleteTarget(null)} disabled={deleteArtifact.isPending}>Cancel</Button>
+                <Button variant="danger" onClick={() => deleteArtifact.mutate(deleteTarget.id)} disabled={deleteArtifact.isPending}>
+                  {deleteArtifact.isPending ? "Deleting..." : "Delete"}
+                </Button>
+              </div>
+            </Panel>
+          </div>
+        ) : null}
       </AppShell>
     </AuthGuard>
   );

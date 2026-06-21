@@ -7,6 +7,7 @@ import type {
   CourseRead,
   DocumentRead,
   StudyArtifactRead,
+  StudyArtifactSummary,
   TokenPair,
   UserRead,
   UUID
@@ -137,6 +138,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  listStudyArtifacts() {
+    return request<StudyArtifactSummary[]>("/study/artifacts");
+  },
+  getStudyArtifact(artifactId: UUID) {
+    return request<StudyArtifactRead>(`/study/artifacts/${artifactId}`);
+  },
+  deleteStudyArtifact(artifactId: UUID) {
+    return request<void>(`/study/artifacts/${artifactId}`, { method: "DELETE" });
   },
   health() {
     return request<{ status: string }>("/health", { auth: false });

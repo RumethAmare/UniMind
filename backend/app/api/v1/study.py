@@ -1,4 +1,5 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,10 +10,36 @@ from app.core.rate_limit import limiter
 from app.db.models import User
 from app.db.session import get_session
 from app.domain.enums import ArtifactType
-from app.schemas.study import StudyArtifactRead, StudyRequest
+from app.schemas.study import StudyArtifactRead, StudyArtifactSummary, StudyRequest
 from app.services.study import StudyService
 
 router = APIRouter()
+
+
+@router.get("/artifacts", response_model=list[StudyArtifactSummary])
+async def list_artifacts(
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session),
+):
+    return await StudyService(session).list_artifacts(current_user.id)
+
+
+@router.get("/artifacts/{artifact_id}", response_model=StudyArtifactRead)
+async def get_artifact(
+    artifact_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session),
+):
+    return await StudyService(session).get_artifact(artifact_id, current_user.id)
+
+
+@router.delete("/artifacts/{artifact_id}", status_code=204)
+async def delete_artifact(
+    artifact_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session),
+):
+    await StudyService(session).delete_artifact(artifact_id, current_user.id)
 
 
 async def _generate(

@@ -311,3 +311,21 @@ class StudyRepository:
         self.session.add(artifact)
         await self.session.flush()
         return artifact
+
+    async def list_for_user(self, user_id: UUID) -> list[StudyArtifact]:
+        result = await self.session.execute(
+            select(StudyArtifact)
+            .where(StudyArtifact.user_id == user_id)
+            .order_by(StudyArtifact.created_at.desc())
+        )
+        return list(result.scalars())
+
+    async def get_for_user(self, artifact_id: UUID, user_id: UUID) -> StudyArtifact | None:
+        result = await self.session.execute(
+            select(StudyArtifact).where(StudyArtifact.id == artifact_id, StudyArtifact.user_id == user_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def delete(self, artifact: StudyArtifact) -> None:
+        await self.session.delete(artifact)
+        await self.session.flush()

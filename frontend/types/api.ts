@@ -75,9 +75,15 @@ export type ChatAskResponse = AskResponse & {
   assistant_message_id: UUID;
 };
 
-export type StudyArtifactRead = {
+export type StudyArtifactSummary = {
   id: UUID;
   artifact_type: "summary" | "flashcards" | "mcqs" | "study_guide";
   title: string;
+  course_id: UUID | null;
+  document_id: UUID | null;
+  created_at: string;
+};
+
+export type StudyArtifactRead = StudyArtifactSummary & {
   content: Record<string, unknown>;
 };
