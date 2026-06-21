@@ -28,10 +28,13 @@ export default function ChatPage() {
   const [documentIds, setDocumentIds] = useState<string[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<ChatSessionRead | null>(null);
   const sessions = useQuery({ queryKey: queryKeys.chatSessions, queryFn: api.listChatSessions, enabled: isAuthenticated });
+  const selectedSessionExists = Boolean(
+    selectedSessionId && sessions.data?.some((session) => session.id === selectedSessionId)
+  );
   const messages = useQuery({
     queryKey: queryKeys.chatMessages(selectedSessionId),
     queryFn: () => api.listMessages(selectedSessionId as string),
-    enabled: isAuthenticated && Boolean(selectedSessionId)
+    enabled: isAuthenticated && selectedSessionExists
   });
   const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses, enabled: isAuthenticated });
   const documents = useQuery({ queryKey: queryKeys.documents, queryFn: api.listDocuments, enabled: isAuthenticated });
@@ -42,7 +45,12 @@ export default function ChatPage() {
     : readyDocuments;
 
   useEffect(() => {
-    if (!selectedSessionId && sessions.data?.[0]) setSelectedSessionId(sessions.data[0].id);
+    if (!sessions.data) return;
+    if (selectedSessionId && !sessions.data.some((session) => session.id === selectedSessionId)) {
+      setSelectedSessionId(sessions.data[0]?.id ?? null);
+      return;
+    }
+    if (!selectedSessionId && sessions.data[0]) setSelectedSessionId(sessions.data[0].id);
   }, [selectedSessionId, sessions.data]);
 
   const createSession = useMutation({
