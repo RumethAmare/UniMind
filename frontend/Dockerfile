@@ -7,10 +7,8 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY frontend ./
-ARG NEXT_PUBLIC_API_BASE_URL=/api/v1
-ARG INTERNAL_API_BASE_URL=http://backend:8000/api/v1
+ARG NEXT_PUBLIC_API_BASE_URL=https://unimind-backend-1aj6.onrender.com/api/v1
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
-ENV INTERNAL_API_BASE_URL=$INTERNAL_API_BASE_URL
 RUN npm run build
 
 FROM node:20-alpine AS runner

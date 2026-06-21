@@ -7,17 +7,14 @@ import type {
   CourseRead,
   DocumentRead,
   StudyArtifactRead,
+  StudyArtifactSummary,
   TokenPair,
   UserRead,
   UUID
 } from "@/types/api";
 
-const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-
 export const API_BASE_URL =
-  configuredApiBaseUrl && configuredApiBaseUrl.length > 0
-    ? configuredApiBaseUrl
-    : "/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -111,10 +108,14 @@ export const api = {
   listChatSessions() {
     return request<ChatSessionRead[]>("/chat/sessions");
   },
-  createChatSession(payload: { course_id?: UUID | null; title?: string }) {
+  createChatSession(payload: { course_id?: UUID | null; document_ids?: UUID[]; title?: string }) {
     return request<ChatSessionRead>("/chat/sessions", {
       method: "POST",
-      body: JSON.stringify({ title: payload.title ?? "New chat", course_id: payload.course_id ?? null })
+      body: JSON.stringify({
+        title: payload.title ?? "New chat",
+        course_id: payload.course_id ?? null,
+        document_ids: payload.document_ids ?? []
+      })
     });
   },
   deleteChatSession(sessionId: UUID) {
@@ -137,6 +138,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  listStudyArtifacts() {
+    return request<StudyArtifactSummary[]>("/study/artifacts");
+  },
+  getStudyArtifact(artifactId: UUID) {
+    return request<StudyArtifactRead>(`/study/artifacts/${artifactId}`);
+  },
+  deleteStudyArtifact(artifactId: UUID) {
+    return request<void>(`/study/artifacts/${artifactId}`, { method: "DELETE" });
   },
   health() {
     return request<{ status: string }>("/health", { auth: false });

@@ -1,131 +1,139 @@
-# UniMind Project Guide
+# UniMind
 
-UniMind is an AI-powered study assistant. Students upload course material, ask questions, and receive answers grounded in uploaded documents using Retrieval-Augmented Generation (RAG).
+UniMind is an AI study assistant for course materials. Students create courses, upload PDF, DOCX, or TXT files, then use grounded chat and study tools to learn from their own documents.
 
-This guide documents the current working local setup: Next.js frontend, FastAPI backend, PostgreSQL, Qdrant, Gemini LLM/embeddings, Docker startup, local development, testing, and troubleshooting.
+## Features
 
-## Stack
+- JWT authentication with access and refresh tokens
+- Course and document management
+- PDF, DOCX, and TXT ingestion with status tracking
+- Retrieval-Augmented Generation (RAG) chat with document/page citations
+- Persistent chat sessions with permanent deletion
+- Per-chat material scope: all materials, one course, selected documents, or both
+- Study tools for summaries, flashcards, MCQs, and study guides
+- Saved study-session history with load and permanent delete
+- Interactive MCQ quizzes with locked answers, instant correct/wrong feedback, explanations, score, and reset
+- Dark mode and responsive Next.js UI
 
-- Frontend: Next.js, React, TypeScript, TailwindCSS, React Query
-- Backend: FastAPI, Python 3.12+, SQLAlchemy async
-- Database: PostgreSQL
-- Vector database: Qdrant
-- LLM: Gemini, default `gemini-2.5-flash`
-- Embeddings: Gemini, default `gemini-embedding-001`
-- Auth: JWT access and refresh tokens
-- Deployment: Docker Compose
+## Tech Stack
 
-## Local URLs
+| Area | Technology |
+| --- | --- |
+| Frontend | Next.js 14, React 18, TypeScript, Tailwind CSS |
+| Client state | TanStack React Query |
+| UI icons | Lucide React |
+| Backend | FastAPI on Python 3.12+ |
+| Validation/config | Pydantic Settings |
+| ORM/migrations | SQLAlchemy async, Alembic, asyncpg |
+| Relational database | PostgreSQL 16 |
+| Vector database | Qdrant 1.9.7 with `qdrant-client==1.10.1` |
+| LLM | Gemini Developer API, `gemini-2.5-flash` |
+| Embeddings | Gemini `gemini-embedding-001`, 768 dimensions |
+| Authentication | `python-jose`, bcrypt |
+| API protection | SlowAPI rate limiting, CORS middleware |
+| Testing | Pytest, Vitest, Testing Library, Playwright |
+| Containers/deployment | Docker Compose locally, Render Blueprint (`render.yaml`) |
+
+## Architecture
+
+1. Uploaded files are stored on disk and recorded in PostgreSQL.
+2. Background ingestion extracts text, creates chunks, and generates Gemini embeddings.
+3. PostgreSQL keeps canonical document/chunk data; Qdrant keeps vectors and retrieval metadata.
+4. A chat request embeds its question, retrieves scoped chunks from Qdrant, builds bounded context, and asks Gemini for a grounded JSON response.
+5. Responses include confidence and document/page citations.
+
+If the embedding provider, model, or dimension changes, reprocess documents so stored Qdrant vectors use the same embedding space.
+
+## Project Layout
+
+```text
+frontend/       Next.js application
+backend/        FastAPI application and Alembic migrations
+database/init/  Initial PostgreSQL schema
+docker-compose.yml
+render.yaml     Render Blueprint
+```
+
+## Local Setup
+
+### Requirements
+
+- Docker and Docker Compose
+- Node.js 20+
+- Python 3.12+
+- `uv`
+- Gemini API key
+
+### Configure the backend
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Set this value in `backend/.env`:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+Important defaults:
+
+```env
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=gemini-embedding-001
+EMBEDDING_DIMENSION=768
+RAG_TOP_K=5
+RAG_MIN_SCORE=0.2
+RAG_MAX_CONTEXT_CHARS=12000
+```
+
+Never commit real API keys, database URLs, or `.env` files.
+
+### Run with Docker Compose
+
+```bash
+docker compose up -d --build
+docker compose ps
+```
+
+Docker Compose reads `backend/.env.example`. To provide a real Gemini key without editing tracked files, create an untracked `docker-compose.override.yml`:
+
+```yaml
+services:
+  backend:
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+```
+
+Then set `GEMINI_API_KEY` in the root `.env` before starting Compose.
+
+Default local URLs:
 
 | Service | URL |
 | --- | --- |
-| Frontend | `http://localhost:3010` |
-| Backend OpenAPI docs | `http://localhost:8010/docs` |
-| Backend health | `http://localhost:8010/api/v1/health` |
-| Backend readiness | `http://localhost:8010/api/v1/ready` |
-| Qdrant dashboard/API | `http://localhost:6340` |
-| PostgreSQL host port | `localhost:55433` |
+| Frontend | `http://localhost:3000` |
+| Backend docs | `http://localhost:8000/docs` |
+| Backend health | `http://localhost:8000/api/v1/health` |
+| Backend readiness | `http://localhost:8000/api/v1/ready` |
+| Qdrant | `http://localhost:6333` |
 
-Inside Docker, services still use their container ports:
-
-```env
-INTERNAL_API_BASE_URL=http://backend:8000/api/v1
-DATABASE_URL=postgresql+asyncpg://unimind:unimind@postgres:5432/unimind
-QDRANT_URL=http://qdrant:6333
-```
-
-## Requirements
-
-- Docker and Docker Compose
-- Node.js 20 recommended for frontend local development
-- Python 3.12+
-- `uv` for backend local development
-- Gemini API key for document ingestion, chat, RAG, and study generation
-- Optional: Playwright browser binaries for e2e tests
-
-## Environment Setup
-
-Create local env files from examples if they do not already exist:
+For hosts with limited root-disk space, use a writable temporary directory:
 
 ```bash
-cp .env.example .env
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env.local
+TMPDIR=/mnt/newvolume/tmp docker compose up -d --build
 ```
 
-Set your Gemini key in `backend/.env`:
+### Run services directly
 
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-```
-
-Current AI defaults:
-
-```env
-LLM_PROVIDER=gemini
-GEMINI_MODEL=gemini-2.5-flash
-EMBEDDING_PROVIDER=gemini
-GEMINI_EMBEDDING_MODEL=gemini-embedding-001
-EMBEDDING_DIMENSION=768
-```
-
-Current root `.env` port defaults:
-
-```env
-FRONTEND_PORT=3010
-BACKEND_PORT=8010
-POSTGRES_PORT=55433
-QDRANT_HTTP_PORT=6340
-QDRANT_GRPC_PORT=6341
-NEXT_PUBLIC_API_BASE_URL=/api/v1
-INTERNAL_API_BASE_URL=http://backend:8000/api/v1
-```
-
-Never commit real `.env` files or API keys. Local env files are ignored by git.
-
-## Docker Startup
-
-Because this machine uses `/mnt/newvolume` for Docker temp space, start with:
+Start PostgreSQL and Qdrant first:
 
 ```bash
-TMPDIR=/mnt/newvolume/tmp docker compose up -d
+docker compose up -d postgres qdrant
 ```
 
-Rebuild after code changes:
-
-```bash
-TMPDIR=/mnt/newvolume/tmp docker compose up -d --build frontend backend
-```
-
-Check status:
-
-```bash
-docker compose ps
-curl http://localhost:3010/api/v1/health
-```
-
-Docker services:
-
-- `frontend`: Next.js web app
-- `backend`: FastAPI API server
-- `postgres`: relational data for users, documents, chunks, chat, and study artifacts
-- `qdrant`: vector database for semantic search
-
-Docker volumes:
-
-- `backend_uploads`: uploaded PDF/DOCX/TXT files
-- `postgres_data`: PostgreSQL data
-- `qdrant_data`: Qdrant vector storage
-
-## Local Development Startup
-
-Run infrastructure first:
-
-```bash
-TMPDIR=/mnt/newvolume/tmp docker compose up -d postgres qdrant
-```
-
-Run backend locally:
+Start the backend:
 
 ```bash
 cd backend
@@ -133,7 +141,7 @@ uv sync --extra dev
 uv run uvicorn app.main:app --reload
 ```
 
-Run frontend locally:
+Start the frontend:
 
 ```bash
 cd frontend
@@ -141,178 +149,67 @@ npm install
 npm run dev
 ```
 
-When running frontend locally, make sure the frontend API base URL points at the backend you are using.
+Set `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1` for a directly-run frontend.
 
-## Working Pipeline
+## Application Workflows
 
-1. User registers or logs in.
-2. User creates a course.
-3. User uploads a PDF, DOCX, or TXT file.
-4. Backend validates file extension, MIME type, and size.
-5. Backend stores the file in local upload storage.
-6. Backend creates a `documents` row with status `uploaded`.
-7. Background ingestion starts in process.
-8. Backend extracts text while preserving page numbers.
-9. Text is cleaned and split into chunks.
-10. Gemini `gemini-embedding-001` creates 768-dimensional embeddings.
-11. PostgreSQL stores canonical chunk text and metadata.
-12. Qdrant stores vectors and metadata payload.
-13. Document status becomes `ready`, or `failed` if ingestion errors.
-14. User asks a question in chat.
-15. Backend embeds the query with Gemini.
-16. Qdrant retrieves semantically relevant chunks using user/course/document filters.
-17. Backend filters low-score results and fetches canonical chunk text from PostgreSQL.
-18. Backend builds bounded context.
-19. Gemini generates a grounded JSON answer.
-20. Backend returns answer, confidence score, and citations.
-21. Frontend renders the answer and citation drawer.
+### Documents and RAG
 
-If you switch embedding providers or embedding models, re-upload or reprocess documents so stored Qdrant vectors match the active embedding space.
+1. Create a course, then upload a PDF, DOCX, or TXT document.
+2. Wait until document status changes to `ready`.
+3. Create a chat and choose its material scope.
+4. Ask a question. UniMind retrieves relevant chunks and returns cited answer text.
 
-## RAG Details
-
-RAG config:
-
-```env
-RAG_TOP_K=5
-RAG_MIN_SCORE=0.2
-RAG_MAX_CONTEXT_CHARS=12000
-```
-
-Qdrant payload fields:
-
-```json
-{
-  "user_id": "uuid",
-  "course_id": "uuid|null",
-  "document_id": "uuid",
-  "chunk_id": "uuid",
-  "document_name": "string",
-  "page_number": 1,
-  "chunk_index": 0
-}
-```
-
-Answer shape:
-
-```json
-{
-  "answer": "string",
-  "confidence_score": 0.0,
-  "sources": [
-    {
-      "document_name": "string",
-      "page_number": 1,
-      "chunk_id": "uuid"
-    }
-  ]
-}
-```
-
-No-context fallback:
+The no-context response is:
 
 ```text
 I could not find enough relevant information in the uploaded materials.
 ```
 
-In that case, `confidence_score` is `0.0` and `sources` is empty.
+### Chat Scope
 
-## Frontend Guide
+New chats can use:
 
-Routes:
+- All ready user materials
+- One course
+- One or more selected ready documents
+- One course plus selected documents from that course
 
-- `/login`: login and registration
-- `/dashboard`: overview, recent documents, quick actions
-- `/documents`: upload, list, status, delete
-- `/chat`: chat sessions, question answering, citation drawer, chat deletion
-- `/study`: summaries, flashcards, interactive MCQs, study guides
-- `/settings`: profile, API status, theme, course management
+Scope is saved with the chat and cannot be changed later. Deleting a scoped course or document never broadens a chat's search scope.
 
-Main behaviors:
+### Study Tools
 
-- JWT tokens are stored client-side for API calls.
-- `Authorization: Bearer <token>` is attached to protected requests.
-- Dark mode is persisted in local storage.
-- Document list polls status so `uploaded` and `processing` can update to `ready` or `failed`.
-- Chat UI uses a loading state while the backend generates an answer.
-- Chat sessions can be deleted from the sidebar with confirmation.
-- Citation drawer shows document name, page number, and chunk ID.
-- MCQ study artifacts render as an interactive quiz:
-  - selecting an option gives immediate feedback
-  - wrong answers show the correct answer
-  - explanations appear after answering
-  - answers can be reset
+Generated summaries, flashcards, MCQs, and study guides are automatically saved. The Study Tools page lists saved sessions, lets users reload them, and supports permanent deletion. MCQ sessions render as interactive quizzes when their saved content is valid.
 
-## Backend Guide
+## API
 
-API prefix:
+All endpoints use the `/api/v1` prefix.
 
-```text
-/api/v1
-```
+| Group | Endpoints |
+| --- | --- |
+| Auth | `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `GET /auth/me` |
+| Courses | `GET/POST /courses`, `GET/PATCH/DELETE /courses/{course_id}` |
+| Documents | `GET /documents`, `POST /documents/upload`, `GET/DELETE /documents/{document_id}` |
+| Chat | `GET/POST /chat/sessions`, `DELETE /chat/sessions/{session_id}`, `GET /chat/sessions/{session_id}/messages`, `POST /chat/sessions/{session_id}/ask` |
+| RAG | `POST /rag/query` |
+| Study generation | `POST /study/summary`, `POST /study/flashcards`, `POST /study/mcqs`, `POST /study/guide` |
+| Study history | `GET /study/artifacts`, `GET/DELETE /study/artifacts/{artifact_id}` |
+| Health | `GET /health`, `GET /ready` |
 
-API groups:
+OpenAPI documentation is available at `/docs` on the backend.
 
-- Auth:
-  - `POST /auth/register`
-  - `POST /auth/login`
-  - `POST /auth/refresh`
-  - `GET /auth/me`
-- Courses:
-  - `GET /courses`
-  - `POST /courses`
-  - `GET /courses/{course_id}`
-  - `PATCH /courses/{course_id}`
-  - `DELETE /courses/{course_id}`
-- Documents:
-  - `GET /documents`
-  - `POST /documents/upload`
-  - `GET /documents/{document_id}`
-  - `DELETE /documents/{document_id}`
-- Chat:
-  - `POST /chat/sessions`
-  - `GET /chat/sessions`
-  - `DELETE /chat/sessions/{session_id}`
-  - `GET /chat/sessions/{session_id}/messages`
-  - `POST /chat/sessions/{session_id}/ask`
-- Direct RAG:
-  - `POST /rag/query`
-- Study tools:
-  - `POST /study/summary`
-  - `POST /study/flashcards`
-  - `POST /study/mcqs`
-  - `POST /study/guide`
-- Health:
-  - `GET /health`
-  - `GET /ready`
+## Render Deployment
 
-OpenAPI docs:
+`render.yaml` provisions:
 
-```text
-http://localhost:8010/docs
-```
+- `unimind-backend`: Docker web service with Alembic pre-deploy migration, persistent upload disk, PostgreSQL, Qdrant, Gemini configuration, and CORS settings
+- `unimind-frontend`: Docker web service
+- `unimind-qdrant`: private Qdrant service with persistent vector disk
+- `unimind-postgres`: Render PostgreSQL database
 
-## Database
+Set `GEMINI_API_KEY` manually in the Render backend service environment. It is intentionally not stored in the repository. Render runs `alembic upgrade head` before backend deployments.
 
-PostgreSQL stores:
-
-- users
-- courses
-- documents
-- document chunks
-- chat sessions
-- chat messages
-- study artifacts
-- refresh tokens
-
-Qdrant stores:
-
-- chunk vectors
-- metadata payload for retrieval filtering and citations
-
-Canonical chunk text remains in PostgreSQL, not Qdrant.
-
-Deleting a chat session deletes its messages through the existing `ON DELETE CASCADE` relationship.
+When frontend API URL configuration changes, redeploy the frontend because `NEXT_PUBLIC_API_BASE_URL` is baked into its production build.
 
 ## Testing
 
@@ -330,13 +227,12 @@ Frontend:
 ```bash
 cd frontend
 npm install
-npm run lint
 npm run typecheck
 npm run test
 npm run build
 ```
 
-Frontend e2e:
+Optional end-to-end tests:
 
 ```bash
 cd frontend
@@ -344,183 +240,30 @@ npx playwright install
 npm run e2e
 ```
 
-Docker config check:
-
-```bash
-docker compose config
-```
-
 ## Troubleshooting
 
-### Missing Gemini Key
+### Gemini errors
 
-Symptoms:
+- `GEMINI_API_KEY is not configured`: add the key to local backend configuration or the Render backend environment.
+- `429`: quota/rate-limit issue. Check Gemini API usage, plan, and billing.
+- `503 UNAVAILABLE`: temporary model capacity issue. Retry later.
 
-- Document ingestion fails.
-- Chat or study generation returns `GEMINI_API_KEY is not configured`.
+### Qdrant errors
 
-Fix `backend/.env`:
+The project pins `qdrant-client==1.10.1` because backend retrieval uses its compatible `.search()` API. Rebuild the backend after dependency changes.
 
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-LLM_PROVIDER=gemini
-EMBEDDING_PROVIDER=gemini
-```
+### Document processing fails
 
-Restart backend:
+Check backend logs. Common causes are missing Gemini credentials, unsupported/unreadable file content, unavailable Qdrant, or a Gemini API failure. Failed documents expose an error message in the document list.
 
-```bash
-TMPDIR=/mnt/newvolume/tmp docker compose restart backend
-```
+### Authentication or API failures
 
-### Gemini Model Not Found
-
-Symptoms:
-
-```text
-models/... is not found for API version v1beta
-```
-
-Current working defaults:
-
-```env
-GEMINI_MODEL=gemini-2.5-flash
-GEMINI_EMBEDDING_MODEL=gemini-embedding-001
-GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com/v1beta
-```
-
-You can list models using the Gemini API if your key changes model availability.
-
-### Qdrant Client Search Errors
-
-The backend supports newer Qdrant clients using `query_points`. If you see a Qdrant client method error, rebuild the backend image:
-
-```bash
-TMPDIR=/mnt/newvolume/tmp docker compose up -d --build backend
-```
-
-### Slow Docker Build Or No Space Left
-
-Use the new-volume temp directory:
-
-```bash
-TMPDIR=/mnt/newvolume/tmp docker compose up -d --build frontend backend
-```
-
-The project has a `.dockerignore` so Docker should not send `node_modules`, `.next`, caches, or env files as build context.
-
-### Backend Cannot Reach Postgres Or Qdrant
-
-Check services:
-
-```bash
-docker compose ps
-docker compose logs postgres
-docker compose logs qdrant
-docker compose logs backend
-```
-
-Inside Docker, backend should use:
-
-```env
-DATABASE_URL=postgresql+asyncpg://unimind:unimind@postgres:5432/unimind
-QDRANT_URL=http://qdrant:6333
-```
-
-### Document Stuck In Processing
-
-Check backend logs:
-
-```bash
-docker compose logs backend
-```
-
-Common causes:
-
-- missing Gemini API key
-- invalid PDF text extraction
-- Qdrant unavailable
-- Gemini request failure
-
-Failed documents should show `failed` status and an error message.
-
-### Frontend Cannot Reach Backend
-
-For Docker, frontend should use:
-
-```env
-NEXT_PUBLIC_API_BASE_URL=/api/v1
-INTERNAL_API_BASE_URL=http://backend:8000/api/v1
-```
-
-Rebuild frontend if this value changes:
-
-```bash
-TMPDIR=/mnt/newvolume/tmp docker compose up -d --build frontend
-```
-
-### Port Conflicts
-
-Current local host ports:
-
-- Frontend: `3010`
-- Backend: `8010`
-- PostgreSQL: `55433`
-- Qdrant HTTP: `6340`
-- Qdrant gRPC: `6341`
-
-Change ports in root `.env` if needed:
-
-```env
-FRONTEND_PORT=3010
-BACKEND_PORT=8010
-POSTGRES_PORT=55433
-QDRANT_HTTP_PORT=6340
-QDRANT_GRPC_PORT=6341
-```
-
-### Stale Login Token
-
-If the app returns `401 Unauthorized` after database resets or backend changes:
-
-1. Hard refresh the app.
-2. Log in again.
-3. If needed, clear browser local storage for `http://localhost:3010`.
-
-## Optional Providers
-
-OpenAI remains available in code as an optional provider. To switch back, set:
-
-```env
-LLM_PROVIDER=openai
-EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=your_openai_key_here
-OPENAI_MODEL=gpt-4o-mini
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIMENSION=768
-```
-
-Local BGE embeddings are also optional:
-
-```bash
-cd backend
-uv sync --extra local-embeddings
-```
-
-Then set:
-
-```env
-EMBEDDING_PROVIDER=local
-LOCAL_EMBEDDING_MODEL=BAAI/bge-base-en-v1.5
-```
-
-Local embeddings may be slower and require more CPU/RAM.
+Log in again after backend/database resets. For frontend deployment issues, verify `NEXT_PUBLIC_API_BASE_URL`, CORS origins, and backend health before rebuilding the frontend.
 
 ## Current Limitations
 
-- Ingestion runs as an in-process background task.
+- Document ingestion runs in-process as a background task.
 - Chat responses are non-streaming.
-- Uploaded document preview is metadata/citation based; full PDF preview is not implemented.
-- MCQ quiz attempts are frontend-only and are not saved.
-- No organization/team billing model.
-- No Kubernetes manifests yet.
+- Uploaded document preview is citation/metadata based; full PDF preview is not implemented.
+- MCQ attempt state is browser-only and is not saved with study sessions.
+- No organization/team model.

@@ -26,6 +26,16 @@ class FakeVectorStore:
         return self.hits
 
 
+class ScopedFakeVectorStore:
+    def __init__(self, hits_by_document):
+        self.hits_by_document = hits_by_document
+        self.calls = []
+
+    async def search(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.hits_by_document[kwargs["document_id"]]
+
+
 class FakeChunkRepo:
     def __init__(self, chunks):
         self.chunks = {chunk.id: chunk for chunk in chunks}
@@ -89,6 +99,56 @@ async def test_retriever_filters_below_min_score():
     results = await retriever.retrieve(user_id=uuid4(), question="q")
 
     assert [item.chunk.id for item in results] == [keep.id]
+
+
+@pytest.mark.asyncio
+async def test_retriever_merges_selected_document_results_by_score():
+    first_document = uuid4()
+    second_document = uuid4()
+    first = chunk("first")
+    second = chunk("second")
+    vector_store = ScopedFakeVectorStore(
+        {
+            first_document: [hit(first.id, 0.6, "First")],
+            second_document: [hit(second.id, 0.9, "Second")],
+        }
+    )
+    retriever = RagRetriever(
+        chunks=FakeChunkRepo([first, second]),
+        embeddings=FakeEmbeddings(),
+        vector_store=vector_store,
+        min_score=0.2,
+    )
+
+    results = await retriever.retrieve(
+        user_id=uuid4(),
+        question="q",
+        document_ids=[first_document, second_document],
+        scope_mode="documents",
+    )
+
+    assert [item.chunk.id for item in results] == [second.id, first.id]
+    assert [call["document_id"] for call in vector_store.calls] == [first_document, second_document]
+
+
+@pytest.mark.asyncio
+async def test_retriever_returns_no_context_when_locked_scope_source_is_missing():
+    embeddings = FakeEmbeddings()
+    retriever = RagRetriever(
+        chunks=FakeChunkRepo([]),
+        embeddings=embeddings,
+        vector_store=FakeVectorStore([]),
+        min_score=0.2,
+    )
+
+    results = await retriever.retrieve(
+        user_id=uuid4(),
+        question="q",
+        course_id=None,
+        scope_mode="course",
+    )
+
+    assert results == []
 
 
 def test_context_builder_adds_headers_and_respects_max_chars():

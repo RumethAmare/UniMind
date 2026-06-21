@@ -47,25 +47,15 @@ class QdrantVectorStore:
             must.append(models.FieldCondition(key="course_id", match=models.MatchValue(value=str(course_id))))
         if document_id:
             must.append(models.FieldCondition(key="document_id", match=models.MatchValue(value=str(document_id))))
-        query_filter = models.Filter(must=must)
-        if hasattr(self.client, "search"):
-            return await self.client.search(
-                collection_name=self.collection,
-                query_vector=query_vector,
-                query_filter=query_filter,
-                limit=top_k,
-                with_payload=True,
-            )
-
-        response = await self.client.query_points(
+        return await self.client.search(
             collection_name=self.collection,
-            query=query_vector,
-            query_filter=query_filter,
+            query_vector=query_vector,
+            query_filter=models.Filter(must=must),
             limit=top_k,
             with_payload=True,
         )
-        return response.points
 
     async def health(self) -> bool:
         await self.client.get_collections()
         return True
+

@@ -1,5 +1,4 @@
 import { clsx } from "clsx";
-import { forwardRef } from "react";
 import type React from "react";
 
 export function Button({
@@ -22,10 +21,9 @@ export function Button({
   );
 }
 
-export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(function Input(props, ref) {
+export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      ref={ref}
       className={clsx(
         "h-10 w-full rounded-md border border-line bg-white/80 px-3 text-sm outline-none transition placeholder:text-neutral-500 focus:border-neutral-700 dark:bg-neutral-950 dark:focus:border-neutral-300",
         props.className
@@ -33,12 +31,11 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
       {...props}
     />
   );
-});
+}
 
-export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea(props, ref) {
+export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
-      ref={ref}
       className={clsx(
         "min-h-28 w-full resize-none rounded-md border border-line bg-white/80 px-3 py-2 text-sm outline-none transition placeholder:text-neutral-500 focus:border-neutral-700 dark:bg-neutral-950 dark:focus:border-neutral-300",
         props.className
@@ -46,12 +43,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttrib
       {...props}
     />
   );
-});
+}
 
-export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(function Select(props, ref) {
+export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      ref={ref}
       className={clsx(
         "h-10 w-full rounded-md border border-line bg-white/80 px-3 text-sm outline-none transition focus:border-neutral-700 dark:bg-neutral-950 dark:focus:border-neutral-300",
         props.className
@@ -59,7 +55,7 @@ export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<H
       {...props}
     />
   );
-});
+}
 
 export function Panel({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={clsx("rounded-lg border border-line bg-white/75 dark:bg-neutral-950/80", className)} {...props} />;

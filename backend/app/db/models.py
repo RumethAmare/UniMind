@@ -76,9 +76,30 @@ class ChatSession(Base):
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid())
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     course_id: Mapped[UUID | None] = mapped_column(ForeignKey("courses.id", ondelete="SET NULL"))
+    scope_mode: Mapped[str] = mapped_column(String(30), nullable=False, default="all", server_default="all")
     title: Mapped[str] = mapped_column(String(255), nullable=False, default="New chat")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    document_selections: Mapped[list["ChatSessionDocument"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan", passive_deletes=True, lazy="selectin"
+    )
+
+    @property
+    def document_ids(self) -> list[UUID]:
+        return [selection.document_id for selection in self.document_selections]
+
+
+class ChatSessionDocument(Base):
+    __tablename__ = "chat_session_documents"
+
+    session_id: Mapped[UUID] = mapped_column(
+        ForeignKey("chat_sessions.id", ondelete="CASCADE"), primary_key=True
+    )
+    document_id: Mapped[UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), primary_key=True
+    )
+
+    session: Mapped[ChatSession] = relationship(back_populates="document_selections")
 
 
 class ChatMessage(Base):
@@ -116,4 +137,3 @@ class RefreshToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
