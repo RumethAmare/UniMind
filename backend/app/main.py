@@ -14,15 +14,6 @@ from app.core.rate_limit import limiter
 def create_app() -> FastAPI:
     configure_logging()
     app = FastAPI(title=settings.app_name, version="0.1.0")
-    if settings.cors_origin_list:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=settings.cors_origin_list,
-            allow_origin_regex=settings.cors_origin_regex,
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-        )
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.add_middleware(RequestIdMiddleware)
@@ -32,3 +23,13 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+if settings.cors_origin_list:
+    # Wrapping the complete ASGI app also applies CORS headers to error responses.
+    app = CORSMiddleware(
+        app=app,
+        allow_origins=settings.cors_origin_list,
+        allow_origin_regex=settings.cors_origin_regex,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
