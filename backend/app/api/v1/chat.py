@@ -21,7 +21,9 @@ async def create_session(
     current_user: Annotated[User, Depends(get_current_user)],
     session: AsyncSession = Depends(get_session),
 ):
-    return await ChatService(session).create_session(current_user.id, payload.course_id, payload.title)
+    return await ChatService(session).create_session(
+        current_user.id, payload.course_id, payload.title, payload.document_ids
+    )
 
 
 @router.get("/sessions", response_model=list[ChatSessionRead])
@@ -39,6 +41,15 @@ async def list_messages(
     session: AsyncSession = Depends(get_session),
 ):
     return await ChatService(session).list_messages(session_id, current_user.id)
+
+
+@router.delete("/sessions/{session_id}", status_code=204)
+async def delete_session(
+    session_id: UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    session: AsyncSession = Depends(get_session),
+):
+    await ChatService(session).delete_session(session_id, current_user.id)
 
 
 @router.post("/sessions/{session_id}/ask", response_model=ChatAskResponse)

@@ -53,6 +53,8 @@ export type AskResponse = {
 export type ChatSessionRead = {
   id: UUID;
   course_id: UUID | null;
+  document_ids: UUID[];
+  scope_mode: "all" | "course" | "documents" | "course_documents";
   title: string;
   created_at: string;
   updated_at: string;

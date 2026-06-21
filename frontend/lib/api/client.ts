@@ -107,11 +107,18 @@ export const api = {
   listChatSessions() {
     return request<ChatSessionRead[]>("/chat/sessions");
   },
-  createChatSession(payload: { course_id?: UUID | null; title?: string }) {
+  createChatSession(payload: { course_id?: UUID | null; document_ids?: UUID[]; title?: string }) {
     return request<ChatSessionRead>("/chat/sessions", {
       method: "POST",
-      body: JSON.stringify({ title: payload.title ?? "New chat", course_id: payload.course_id ?? null })
+      body: JSON.stringify({
+        title: payload.title ?? "New chat",
+        course_id: payload.course_id ?? null,
+        document_ids: payload.document_ids ?? []
+      })
     });
+  },
+  deleteChatSession(sessionId: UUID) {
+    return request<void>(`/chat/sessions/${sessionId}`, { method: "DELETE" });
   },
   listMessages(sessionId: UUID) {
     return request<ChatMessageRead[]>(`/chat/sessions/${sessionId}/messages`);

@@ -1,13 +1,15 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.db.models import (
     ChatMessage,
     ChatSession,
+    ChatSessionDocument,
     Course,
     Document,
     DocumentChunk,
@@ -124,6 +126,18 @@ class DocumentRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_ready_for_user(self, document_ids: list[UUID], user_id: UUID) -> list[Document]:
+        if not document_ids:
+            return []
+        result = await self.session.execute(
+            select(Document).where(
+                Document.id.in_(document_ids),
+                Document.user_id == user_id,
+                Document.status == "ready",
+            )
+        )
+        return list(result.scalars())
+
     async def create(
         self,
         user_id: UUID,
@@ -175,7 +189,11 @@ class ChunkRepository:
     async def get_by_ids(self, ids: list[UUID]) -> list[DocumentChunk]:
         if not ids:
             return []
-        result = await self.session.execute(select(DocumentChunk).where(DocumentChunk.id.in_(ids)))
+        result = await self.session.execute(
+            select(DocumentChunk)
+            .join(Document, Document.id == DocumentChunk.document_id)
+            .where(DocumentChunk.id.in_(ids), Document.status == "ready")
+        )
         return list(result.scalars())
 
     async def list_for_scope(
@@ -200,23 +218,44 @@ class ChatRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_session(self, user_id: UUID, course_id: UUID | None, title: str) -> ChatSession:
-        chat_session = ChatSession(user_id=user_id, course_id=course_id, title=title)
+    async def create_session(
+        self,
+        user_id: UUID,
+        course_id: UUID | None,
+        title: str,
+        document_ids: list[UUID],
+        scope_mode: str,
+    ) -> ChatSession:
+        chat_session = ChatSession(user_id=user_id, course_id=course_id, title=title, scope_mode=scope_mode)
+        chat_session.document_selections = [
+            ChatSessionDocument(document_id=document_id) for document_id in document_ids
+        ]
         self.session.add(chat_session)
         await self.session.flush()
         return chat_session
 
     async def list_sessions(self, user_id: UUID) -> list[ChatSession]:
         result = await self.session.execute(
-            select(ChatSession).where(ChatSession.user_id == user_id).order_by(ChatSession.updated_at.desc())
+            select(ChatSession)
+            .options(selectinload(ChatSession.document_selections))
+            .where(ChatSession.user_id == user_id)
+            .order_by(ChatSession.updated_at.desc())
         )
         return list(result.scalars())
 
     async def get_session(self, session_id: UUID, user_id: UUID) -> ChatSession | None:
         result = await self.session.execute(
-            select(ChatSession).where(ChatSession.id == session_id, ChatSession.user_id == user_id)
+            select(ChatSession)
+            .options(selectinload(ChatSession.document_selections))
+            .where(ChatSession.id == session_id, ChatSession.user_id == user_id)
         )
         return result.scalar_one_or_none()
+
+    async def delete_session(self, session_id: UUID, user_id: UUID) -> None:
+        await self.session.execute(
+            delete(ChatSession).where(ChatSession.id == session_id, ChatSession.user_id == user_id)
+        )
+        await self.session.flush()
 
     async def add_message(
         self,

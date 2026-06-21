@@ -60,16 +60,43 @@ class RagRetriever:
         question: str,
         course_id: UUID | None = None,
         document_id: UUID | None = None,
+        document_ids: list[UUID] | None = None,
+        scope_mode: str = "all",
         top_k: int | None = None,
     ) -> list[RetrievedChunk]:
+        if scope_mode in {"course", "course_documents"} and course_id is None:
+            return []
+        if scope_mode in {"documents", "course_documents"} and not document_ids:
+            return []
         query_vector = await self.embeddings.embed_query(question)
-        hits = await self.vector_store.search(
-            query_vector=query_vector,
-            user_id=user_id,
-            course_id=course_id,
-            document_id=document_id,
-            top_k=top_k or settings.rag_top_k,
-        )
+        limit = top_k or settings.rag_top_k
+        if document_ids:
+            hit_groups = [
+                await self.vector_store.search(
+                    query_vector=query_vector,
+                    user_id=user_id,
+                    course_id=course_id,
+                    document_id=selected_document_id,
+                    top_k=limit,
+                )
+                for selected_document_id in document_ids
+            ]
+            seen_chunk_ids: set[str] = set()
+            hits = []
+            for hit in sorted((hit for group in hit_groups for hit in group), key=lambda hit: hit.score, reverse=True):
+                chunk_id = str((hit.payload or {}).get("chunk_id", ""))
+                if chunk_id and chunk_id not in seen_chunk_ids:
+                    hits.append(hit)
+                    seen_chunk_ids.add(chunk_id)
+            hits = hits[:limit]
+        else:
+            hits = await self.vector_store.search(
+                query_vector=query_vector,
+                user_id=user_id,
+                course_id=course_id,
+                document_id=document_id,
+                top_k=limit,
+            )
         kept_hits = [hit for hit in hits if float(hit.score) >= self.min_score]
         chunk_ids: list[UUID] = []
         hit_metadata: dict[UUID, tuple[float, str, int | None]] = {}
@@ -186,6 +213,8 @@ class RagService:
         question: str,
         course_id: UUID | None = None,
         document_id: UUID | None = None,
+        document_ids: list[UUID] | None = None,
+        scope_mode: str = "all",
         top_k: int | None = None,
     ) -> RagAnswer:
         retrieved = await self.retriever.retrieve(
@@ -193,6 +222,8 @@ class RagService:
             question=question,
             course_id=course_id,
             document_id=document_id,
+            document_ids=document_ids,
+            scope_mode=scope_mode,
             top_k=top_k,
         )
         if not retrieved:
