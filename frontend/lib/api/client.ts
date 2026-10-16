@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/lib/auth/tokens";
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/lib/auth/tokens";
 import type {
   AskResponse,
   ChatAskResponse,
@@ -29,7 +29,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+let refreshInFlight: Promise<boolean> | null = null;
+
+// Shares one refresh call between concurrent requests that hit an expired access token.
+function refreshAccessToken(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return false;
+    try {
+      const tokens = await api.refresh(refreshToken);
+      setTokens(tokens.access_token, tokens.refresh_token);
+      return true;
+    } catch {
+      clearTokens();
+      return false;
+    }
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+function send(path: string, options: RequestOptions) {
   const headers = new Headers(options.headers);
   const isForm = options.body instanceof FormData;
   if (!isForm && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
@@ -37,7 +58,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const token = getAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  return fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  let response = await send(path, options);
+  if (response.status === 401 && options.auth !== false && (await refreshAccessToken())) {
+    response = await send(path, options);
+  }
   if (!response.ok) {
     let message = response.statusText;
     try {
