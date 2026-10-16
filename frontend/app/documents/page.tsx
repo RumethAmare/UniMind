@@ -11,6 +11,9 @@ import { useAuth } from "@/features/auth/auth-provider";
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/query/keys";
 
+// Optional client-side cap, e.g. 4 on Vercel where request bodies are limited to 4.5 MB.
+const MAX_UPLOAD_MB = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB) || null;
+
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
@@ -28,6 +31,9 @@ export default function DocumentsPage() {
   const upload = useMutation({
     mutationFn: () => {
       if (!file) throw new Error("Choose a PDF, DOCX, or TXT file.");
+      if (MAX_UPLOAD_MB && file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+        throw new Error(`Files must be ${MAX_UPLOAD_MB} MB or smaller.`);
+      }
       return api.uploadDocument({ file, title: title || undefined, course_id: courseId || null });
     },
     onSuccess() {

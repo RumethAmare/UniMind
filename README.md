@@ -32,7 +32,7 @@ UniMind is an AI study assistant for course materials. Students create courses, 
 | Authentication | `python-jose`, bcrypt |
 | API protection | SlowAPI rate limiting, CORS middleware |
 | Testing | Pytest, Vitest, Testing Library, Playwright |
-| Containers/deployment | Docker Compose locally, Render Blueprint (`render.yaml`) |
+| Containers/deployment | Docker Compose locally; Vercel (frontend and backend), Neon, Qdrant Cloud |
 
 ## Architecture
 
@@ -198,7 +198,64 @@ All endpoints use the `/api/v1` prefix.
 
 OpenAPI documentation is available at `/docs` on the backend.
 
-## Render Deployment
+## Deployment
+
+Both apps deploy to Vercel as two projects from the same repository, using free tiers:
+
+| Part | Host |
+| --- | --- |
+| Frontend | Vercel project, root `frontend` |
+| Backend | Vercel project, root `backend` (FastAPI function) |
+| PostgreSQL | [Neon](https://neon.tech) |
+| Qdrant | [Qdrant Cloud](https://cloud.qdrant.io) |
+
+Vercel functions stop when they respond and limit request bodies to 4.5 MB, so on Vercel the backend ingests each document inside the upload request (`INGEST_INLINE=true`) and uploads are capped at about 4 MB. Uploaded files are only read during ingestion, so the function's temporary disk is enough.
+
+### 1. Databases
+
+- **Neon**: create a project and copy the **direct** (non-pooled) connection string. Its `sslmode=require` option is translated for asyncpg automatically.
+- **Qdrant Cloud**: create a free cluster and copy its URL (e.g. `https://xxxx.cloud.qdrant.io:6333`) and an API key.
+
+Create the schema from your machine, and rerun after adding migrations:
+
+```bash
+cd backend
+uv sync
+DATABASE_URL="postgresql://...neon.tech/neondb?sslmode=require" uv run alembic upgrade head
+```
+
+### 2. Backend project
+
+Import the repository in Vercel, name the project (for example `unimind-api`), and set **Root Directory** to `backend`. Vercel detects FastAPI from `app/main.py`; `backend/vercel.json` allows up to 300 seconds per request so uploads can finish ingesting.
+
+| Variable | Value |
+| --- | --- |
+| `ENVIRONMENT` | `production` |
+| `DATABASE_URL` | Neon direct connection string |
+| `QDRANT_URL` | Qdrant Cloud URL |
+| `QDRANT_API_KEY` | Qdrant Cloud API key |
+| `GEMINI_API_KEY` | Gemini API key |
+| `JWT_SECRET_KEY` | Long random string, e.g. from `openssl rand -hex 32` |
+| `INGEST_INLINE` | `true` |
+| `UPLOAD_DIR` | `/tmp/uploads` |
+| `MAX_UPLOAD_BYTES` | `4000000` |
+| `CORS_ORIGINS` | Your frontend URL, e.g. `https://unimind.vercel.app` |
+| `CORS_ORIGIN_REGEX` | `^https://unimind(-[a-z0-9-]+)?\.vercel\.app$` to also allow preview deployments |
+
+Check `https://<backend>.vercel.app/api/v1/ready` after deploying. It returns `{"status":"ready"}` when PostgreSQL and Qdrant are reachable.
+
+### 3. Frontend project
+
+Import the repository again as a second project (for example `unimind`) with **Root Directory** set to `frontend`.
+
+| Variable | Value |
+| --- | --- |
+| `NEXT_PUBLIC_API_BASE_URL` | `https://<backend>.vercel.app/api/v1` |
+| `NEXT_PUBLIC_MAX_UPLOAD_MB` | `4` |
+
+Redeploy the frontend after changing these, because `NEXT_PUBLIC_*` values are baked into the build. If the frontend project is not named `unimind`, update the backend's `CORS_ORIGINS`/`CORS_ORIGIN_REGEX` to match its domain.
+
+## Render Deployment (legacy)
 
 `render.yaml` provisions:
 

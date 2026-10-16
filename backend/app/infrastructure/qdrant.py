@@ -8,7 +8,7 @@ from app.core.config import settings
 
 class QdrantVectorStore:
     def __init__(self):
-        self.client = AsyncQdrantClient(url=settings.qdrant_url)
+        self.client = AsyncQdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
         self.collection = settings.qdrant_collection
 
     async def ensure_collection(self) -> None:

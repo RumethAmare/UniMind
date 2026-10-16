@@ -6,6 +6,9 @@ import httpx
 from app.core.config import settings
 from app.core.errors import AppError
 
+# Gemini's batchEmbedContents accepts at most 100 requests per call.
+GEMINI_BATCH_SIZE = 100
+
 
 class EmbeddingProvider:
     def __init__(self, provider: str = settings.embedding_provider):
@@ -76,7 +79,37 @@ class GeminiEmbeddingProvider:
             raise AppError("GEMINI_API_KEY is not configured")
         if not texts:
             return []
-        return [await self._embed(f"title: none | text: {text}") for text in texts]
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), GEMINI_BATCH_SIZE):
+            batch = texts[start : start + GEMINI_BATCH_SIZE]
+            vectors.extend(await self._embed_batch([f"title: none | text: {text}" for text in batch]))
+        return vectors
+
+    async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+        url = f"{self.base_url}/models/{self.model_name}:batchEmbedContents"
+        payload = {
+            "requests": [
+                {
+                    "model": f"models/{self.model_name}",
+                    "content": {"parts": [{"text": text}]},
+                    "output_dimensionality": self.dimension,
+                }
+                for text in texts
+            ]
+        }
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                url,
+                headers={"x-goog-api-key": settings.gemini_api_key, "Content-Type": "application/json"},
+                json=payload,
+            )
+        if response.status_code >= 400:
+            raise AppError(f"Gemini embedding request failed: {response.text}", response.status_code)
+        try:
+            embeddings = response.json()["embeddings"]
+            return [item["values"] for item in embeddings]
+        except (KeyError, TypeError) as exc:
+            raise AppError("Gemini embedding response did not include embeddings") from exc
 
     async def _embed(self, text: str) -> list[float]:
         url = f"{self.base_url}/models/{self.model_name}:embedContent"

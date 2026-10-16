@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,8 +22,11 @@ class Settings(BaseSettings):
 
     upload_dir: Path = Path("./uploads")
     max_upload_bytes: int = 50 * 1024 * 1024
+    # Serverless hosts (Vercel) stop work after the response, so ingest before responding.
+    ingest_inline: bool = False
 
     qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None
     qdrant_collection: str = "unimind_chunks"
 
     embedding_provider: str = "gemini"
@@ -51,9 +55,27 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_database_url(cls, value: str) -> str:
         if value.startswith("postgres://"):
-            return value.replace("postgres://", "postgresql+asyncpg://", 1)
-        if value.startswith("postgresql://"):
-            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+            value = value.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif value.startswith("postgresql://"):
+            value = value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # Hosted providers such as Neon append libpq options that asyncpg rejects.
+        parts = urlsplit(value)
+        query = []
+        for key, option in parse_qsl(parts.query):
+            if key == "sslmode":
+                query.append(("ssl", option))
+            elif key != "channel_binding":
+                query.append((key, option))
+        return urlunsplit(parts._replace(query=urlencode(query)))
+
+    @field_validator("qdrant_url", mode="before")
+    @classmethod
+    def normalize_qdrant_url(cls, value: str) -> str:
+        # Accept a bare hostname, e.g. from a platform's service discovery.
+        if "://" not in value:
+            value = f"http://{value}"
+        if urlsplit(value).port is None:
+            value = f"{value.rstrip('/')}:6333"
         return value
 
     @property

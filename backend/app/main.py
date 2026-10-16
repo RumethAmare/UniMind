@@ -22,14 +22,18 @@ def create_app() -> FastAPI:
     return app
 
 
-app = create_app()
-if settings.cors_origin_list:
-    # Wrapping the complete ASGI app also applies CORS headers to error responses.
-    app = CORSMiddleware(
-        app=app,
+api_app = create_app()
+
+# Hosts such as Vercel expect a FastAPI instance named `app`. This shell only adds CORS
+# around the mounted API, so CORS headers also reach the API's error responses.
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+if settings.cors_origin_list or settings.cors_origin_regex:
+    app.add_middleware(
+        CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_origin_regex=settings.cors_origin_regex,
+        allow_origin_regex=settings.cors_origin_regex or None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+app.mount("/", api_app)
