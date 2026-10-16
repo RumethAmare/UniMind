@@ -1,4 +1,4 @@
-import { getAccessToken } from "@/lib/auth/tokens";
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "@/lib/auth/tokens";
 import type {
   AskResponse,
   ChatAskResponse,
@@ -7,17 +7,14 @@ import type {
   CourseRead,
   DocumentRead,
   StudyArtifactRead,
+  StudyArtifactSummary,
   TokenPair,
   UserRead,
   UUID
 } from "@/types/api";
 
-const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-
 export const API_BASE_URL =
-  configuredApiBaseUrl && configuredApiBaseUrl.length > 0
-    ? configuredApiBaseUrl
-    : "/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/api/v1";
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -32,7 +29,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+let refreshInFlight: Promise<boolean> | null = null;
+
+// Shares one refresh call between concurrent requests that hit an expired access token.
+function refreshAccessToken(): Promise<boolean> {
+  refreshInFlight ??= (async () => {
+    const refreshToken = getRefreshToken();
+    if (!refreshToken) return false;
+    try {
+      const tokens = await api.refresh(refreshToken);
+      setTokens(tokens.access_token, tokens.refresh_token);
+      return true;
+    } catch {
+      clearTokens();
+      return false;
+    }
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+function send(path: string, options: RequestOptions) {
   const headers = new Headers(options.headers);
   const isForm = options.body instanceof FormData;
   if (!isForm && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
@@ -40,7 +58,14 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const token = getAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  return fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  let response = await send(path, options);
+  if (response.status === 401 && options.auth !== false && (await refreshAccessToken())) {
+    response = await send(path, options);
+  }
   if (!response.ok) {
     let message = response.statusText;
     try {
@@ -111,10 +136,14 @@ export const api = {
   listChatSessions() {
     return request<ChatSessionRead[]>("/chat/sessions");
   },
-  createChatSession(payload: { course_id?: UUID | null; title?: string }) {
+  createChatSession(payload: { course_id?: UUID | null; document_ids?: UUID[]; title?: string }) {
     return request<ChatSessionRead>("/chat/sessions", {
       method: "POST",
-      body: JSON.stringify({ title: payload.title ?? "New chat", course_id: payload.course_id ?? null })
+      body: JSON.stringify({
+        title: payload.title ?? "New chat",
+        course_id: payload.course_id ?? null,
+        document_ids: payload.document_ids ?? []
+      })
     });
   },
   deleteChatSession(sessionId: UUID) {
@@ -137,6 +166,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     });
+  },
+  listStudyArtifacts() {
+    return request<StudyArtifactSummary[]>("/study/artifacts");
+  },
+  getStudyArtifact(artifactId: UUID) {
+    return request<StudyArtifactRead>(`/study/artifacts/${artifactId}`);
+  },
+  deleteStudyArtifact(artifactId: UUID) {
+    return request<void>(`/study/artifacts/${artifactId}`, { method: "DELETE" });
   },
   health() {
     return request<{ status: string }>("/health", { auth: false });

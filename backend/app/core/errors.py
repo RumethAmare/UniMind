@@ -2,6 +2,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from starlette import status
+import structlog
+
+
+logger = structlog.get_logger(__name__)
 
 
 class AppError(Exception):
@@ -36,3 +40,10 @@ def register_error_handlers(app: FastAPI) -> None:
             content=error_payload("Database constraint violation", request),
         )
 
+    @app.exception_handler(Exception)
+    async def unexpected_error_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("unhandled_application_error", path=request.url.path)
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=error_payload("Internal server error", request),
+        )

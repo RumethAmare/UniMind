@@ -4,13 +4,11 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
-        INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://backend:8000/api/v1}
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
     container_name: unimind-frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api/v1}
-      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL:-http://backend:8000/api/v1}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000/api/v1}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
@@ -23,7 +21,7 @@ services:
     container_name: unimind-backend
     restart: unless-stopped
     env_file:
-      - ./backend/.env
+      - ./backend/.env.example
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-unimind}:${POSTGRES_PASSWORD:-unimind}@postgres:5432/${POSTGRES_DB:-unimind}
       QDRANT_URL: http://qdrant:6333

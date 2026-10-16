@@ -1,34 +1,38 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { Brain, LogIn, UserPlus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Button, Input, Panel } from "@/components/ui";
 import { api } from "@/lib/api/client";
 import { useAuth } from "@/features/auth/auth-provider";
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8)
+  email: z.string().email("Enter a valid email address."),
+  password: z.string().min(8, "Password must be at least 8 characters.")
 });
 
 const registerSchema = loginSchema.extend({
-  full_name: z.string().min(1)
+  full_name: z.string().min(1, "Enter your full name.")
 });
 
 type LoginValues = z.infer<typeof loginSchema>;
 type RegisterValues = z.infer<typeof registerSchema>;
+type FormErrors = Partial<Record<keyof RegisterValues, string>>;
 
 export default function LoginPage() {
   const router = useRouter();
   const { acceptTokens } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
-  const loginForm = useForm<LoginValues>({ resolver: zodResolver(loginSchema) });
-  const registerForm = useForm<RegisterValues>({ resolver: zodResolver(registerSchema) });
+  const [loginValues, setLoginValues] = useState<LoginValues>({ email: "", password: "" });
+  const [registerValues, setRegisterValues] = useState<RegisterValues>({
+    full_name: "",
+    email: "",
+    password: ""
+  });
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const authMutation = useMutation({
     mutationFn: async (values: LoginValues | RegisterValues) =>
@@ -39,10 +43,42 @@ export default function LoginPage() {
     }
   });
 
-  const onSubmit =
-    mode === "login"
-      ? loginForm.handleSubmit((values) => authMutation.mutate(values))
-      : registerForm.handleSubmit((values) => authMutation.mutate(values));
+  function selectMode(nextMode: "login" | "register") {
+    setMode(nextMode);
+    setErrors({});
+    authMutation.reset();
+  }
+
+  function collectErrors(result: z.SafeParseError<LoginValues | RegisterValues>) {
+    const fieldErrors = result.error.flatten().fieldErrors;
+    setErrors({
+      full_name: fieldErrors.full_name?.[0],
+      email: fieldErrors.email?.[0],
+      password: fieldErrors.password?.[0]
+    });
+  }
+
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setErrors({});
+    const payload =
+      mode === "login"
+        ? {
+            email: loginValues.email.trim(),
+            password: loginValues.password
+          }
+        : {
+            full_name: registerValues.full_name.trim(),
+            email: registerValues.email.trim(),
+            password: registerValues.password
+          };
+    const result = mode === "login" ? loginSchema.safeParse(payload) : registerSchema.safeParse(payload);
+    if (!result.success) {
+      collectErrors(result);
+      return;
+    }
+    authMutation.mutate(result.data);
+  }
 
   return (
     <main className="grid min-h-screen place-items-center bg-paper p-4 text-ink dark:bg-neutral-950 dark:text-neutral-100">
@@ -59,52 +95,80 @@ export default function LoginPage() {
 
         <Panel className="p-4">
           <div className="mb-4 grid grid-cols-2 gap-2">
-            <Button variant={mode === "login" ? "primary" : "secondary"} onClick={() => setMode("login")}>
+            <Button type="button" variant={mode === "login" ? "primary" : "secondary"} onClick={() => selectMode("login")}>
               <LogIn size={16} /> Login
             </Button>
-            <Button variant={mode === "register" ? "primary" : "secondary"} onClick={() => setMode("register")}>
+            <Button type="button" variant={mode === "register" ? "primary" : "secondary"} onClick={() => selectMode("register")}>
               <UserPlus size={16} /> Register
             </Button>
           </div>
 
           <form className="space-y-3" onSubmit={onSubmit}>
             {mode === "register" ? (
-              <div>
-                <Input placeholder="Full name" {...registerForm.register("full_name")} />
-                {registerForm.formState.errors.full_name ? (
-                  <p className="mt-1 text-xs text-red-600">{registerForm.formState.errors.full_name.message}</p>
-                ) : null}
-              </div>
+              <FieldError message={errors.full_name}>
+                <Input
+                  placeholder="Full name"
+                  value={registerValues.full_name}
+                  aria-invalid={Boolean(errors.full_name)}
+                  onChange={(event) =>
+                    setRegisterValues((current) => ({ ...current, full_name: event.target.value }))
+                  }
+                />
+              </FieldError>
             ) : null}
             {mode === "login" ? (
               <>
-                <div>
-                  <Input placeholder="Email" type="email" autoComplete="email" {...loginForm.register("email")} />
-                  {loginForm.formState.errors.email ? (
-                    <p className="mt-1 text-xs text-red-600">{loginForm.formState.errors.email.message}</p>
-                  ) : null}
-                </div>
-                <div>
-                  <Input placeholder="Password" type="password" autoComplete="current-password" {...loginForm.register("password")} />
-                  {loginForm.formState.errors.password ? (
-                    <p className="mt-1 text-xs text-red-600">{loginForm.formState.errors.password.message}</p>
-                  ) : null}
-                </div>
+                <FieldError message={errors.email}>
+                  <Input
+                    placeholder="Email"
+                    type="email"
+                    autoComplete="email"
+                    value={loginValues.email}
+                    aria-invalid={Boolean(errors.email)}
+                    onChange={(event) =>
+                      setLoginValues((current) => ({ ...current, email: event.target.value }))
+                    }
+                  />
+                </FieldError>
+                <FieldError message={errors.password}>
+                  <Input
+                    placeholder="Password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={loginValues.password}
+                    aria-invalid={Boolean(errors.password)}
+                    onChange={(event) =>
+                      setLoginValues((current) => ({ ...current, password: event.target.value }))
+                    }
+                  />
+                </FieldError>
               </>
             ) : (
               <>
-                <div>
-                  <Input placeholder="Email" type="email" autoComplete="email" {...registerForm.register("email")} />
-                  {registerForm.formState.errors.email ? (
-                    <p className="mt-1 text-xs text-red-600">{registerForm.formState.errors.email.message}</p>
-                  ) : null}
-                </div>
-                <div>
-                  <Input placeholder="Password" type="password" autoComplete="new-password" {...registerForm.register("password")} />
-                  {registerForm.formState.errors.password ? (
-                    <p className="mt-1 text-xs text-red-600">{registerForm.formState.errors.password.message}</p>
-                  ) : null}
-                </div>
+                <FieldError message={errors.email}>
+                  <Input
+                    placeholder="Email"
+                    type="email"
+                    autoComplete="email"
+                    value={registerValues.email}
+                    aria-invalid={Boolean(errors.email)}
+                    onChange={(event) =>
+                      setRegisterValues((current) => ({ ...current, email: event.target.value }))
+                    }
+                  />
+                </FieldError>
+                <FieldError message={errors.password}>
+                  <Input
+                    placeholder="Password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={registerValues.password}
+                    aria-invalid={Boolean(errors.password)}
+                    onChange={(event) =>
+                      setRegisterValues((current) => ({ ...current, password: event.target.value }))
+                    }
+                  />
+                </FieldError>
               </>
             )}
             {authMutation.error ? <p className="text-sm text-red-600">{authMutation.error.message}</p> : null}
@@ -115,5 +179,14 @@ export default function LoginPage() {
         </Panel>
       </div>
     </main>
+  );
+}
+
+function FieldError({ children, message }: { children: React.ReactNode; message?: string }) {
+  return (
+    <div className="space-y-1">
+      {children}
+      {message ? <p className="text-xs text-red-600">{message}</p> : null}
+    </div>
   );
 }

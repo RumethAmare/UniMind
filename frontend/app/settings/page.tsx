@@ -67,18 +67,18 @@ export default function SettingsPage() {
             </Panel>
           </div>
 
-          <CourseManager />
+          <CourseManager enabled={Boolean(user)} />
         </div>
       </AppShell>
     </AuthGuard>
   );
 }
 
-function CourseManager() {
+function CourseManager({ enabled }: { enabled: boolean }) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses });
+  const courses = useQuery({ queryKey: queryKeys.courses, queryFn: api.listCourses, enabled });
   const create = useMutation({
     mutationFn: () => api.createCourse({ name, description: description || undefined }),
     async onSuccess() {

@@ -26,6 +26,7 @@ describe("InteractiveMcqs", () => {
     await user.click(screen.getByRole("button", { name: /b tcp/i }));
 
     expect(screen.getByText("Correct")).toBeInTheDocument();
+    expect(screen.getByText("1 correct · 1 of 2 answered")).toBeInTheDocument();
     expect(screen.getByText("TCP provides reliable, ordered delivery.")).toBeInTheDocument();
   });
 
@@ -36,6 +37,7 @@ describe("InteractiveMcqs", () => {
     await user.click(screen.getByRole("button", { name: /a udp/i }));
 
     expect(screen.getByText("Incorrect. Correct answer: TCP")).toBeInTheDocument();
+    expect(screen.getByText("0 correct · 1 of 2 answered")).toBeInTheDocument();
     expect(screen.getByText("TCP provides reliable, ordered delivery.")).toBeInTheDocument();
   });
 
@@ -44,11 +46,29 @@ describe("InteractiveMcqs", () => {
     render(<InteractiveMcqs mcqs={mcqs} />);
 
     await user.click(screen.getByRole("button", { name: /b tcp/i }));
-    expect(screen.getByText("1 of 2 answered")).toBeInTheDocument();
+    expect(screen.getByText("1 correct · 1 of 2 answered")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /reset answers/i }));
 
-    expect(screen.getByText("0 of 2 answered")).toBeInTheDocument();
+    expect(screen.getByText("0 correct · 0 of 2 answered")).toBeInTheDocument();
     expect(screen.queryByText("Correct")).not.toBeInTheDocument();
+  });
+
+  it("locks answers until reset", async () => {
+    const user = userEvent.setup();
+    render(<InteractiveMcqs mcqs={mcqs} />);
+
+    const wrongOption = screen.getByRole("button", { name: /a udp/i });
+    const correctOption = screen.getByRole("button", { name: /b tcp/i });
+    await user.click(wrongOption);
+
+    expect(wrongOption).toBeDisabled();
+    expect(correctOption).toBeDisabled();
+    await user.click(correctOption);
+    expect(screen.getByText("Incorrect. Correct answer: TCP")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /reset answers/i }));
+    expect(wrongOption).toBeEnabled();
+    expect(screen.getByText("0 correct · 0 of 2 answered")).toBeInTheDocument();
   });
 });

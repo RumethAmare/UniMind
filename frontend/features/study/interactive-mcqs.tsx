@@ -14,12 +14,13 @@ export type McqQuestion = {
 export function InteractiveMcqs({ mcqs }: { mcqs: McqQuestion[] }) {
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const answeredCount = Object.keys(answers).length;
+  const correctCount = mcqs.filter((mcq, questionIndex) => answers[questionIndex] === mcq.correct_answer).length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-neutral-500">
-          {answeredCount} of {mcqs.length} answered
+          {correctCount} correct · {answeredCount} of {mcqs.length} answered
         </p>
         <Button variant="secondary" onClick={() => setAnswers({})} disabled={answeredCount === 0}>
           Reset answers
@@ -45,9 +46,10 @@ export function InteractiveMcqs({ mcqs }: { mcqs: McqQuestion[] }) {
                     key={`${option}-${optionIndex}`}
                     type="button"
                     onClick={() => setAnswers((current) => ({ ...current, [questionIndex]: option }))}
+                    disabled={isAnswered}
                     className={clsx(
                       "flex min-h-11 w-full items-center rounded-md border border-line px-3 py-2 text-left text-sm transition",
-                      "hover:border-neutral-500 hover:bg-neutral-50 dark:hover:border-neutral-500 dark:hover:bg-neutral-900",
+                      "hover:border-neutral-500 hover:bg-neutral-50 disabled:cursor-default disabled:hover:border-line disabled:hover:bg-transparent dark:hover:border-neutral-500 dark:hover:bg-neutral-900",
                       isAnswered && isAnswer && "border-green-500 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-100",
                       isAnswered && isSelected && !isAnswer && "border-red-500 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-100"
                     )}

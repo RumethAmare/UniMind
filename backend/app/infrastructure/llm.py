@@ -1,24 +1,20 @@
 import json
 
 import httpx
-from openai import AsyncOpenAI
 
 from app.core.config import settings
 from app.core.errors import AppError
 
 
-class LLMProvider:
-    def __init__(self, provider: str = settings.llm_provider):
-        normalized = provider.lower()
-        if normalized == "openai":
-            self.provider = OpenAIProvider()
-        elif normalized == "gemini":
-            self.provider = GeminiProvider()
-        else:
-            raise AppError(f"Unsupported LLM provider: {provider}")
-
-    async def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
-        return await self.provider.complete_json(system_prompt, user_prompt)
+def extract_json_object(text: str) -> dict:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            raise
+        return json.loads(text[start : end + 1])
 
 
 class OpenAIProvider:
@@ -26,6 +22,8 @@ class OpenAIProvider:
         if not settings.openai_api_key:
             self.client = None
         else:
+            from openai import AsyncOpenAI
+
             self.client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     async def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
@@ -52,7 +50,6 @@ class GeminiProvider:
     async def complete_json(self, system_prompt: str, user_prompt: str) -> dict:
         if not self.api_key:
             raise AppError("GEMINI_API_KEY is not configured")
-
         url = f"{self.base_url}/models/{self.model}:generateContent"
         payload = {
             "systemInstruction": {"parts": [{"text": system_prompt}]},
@@ -60,26 +57,22 @@ class GeminiProvider:
             "generationConfig": {"responseMimeType": "application/json"},
         }
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(url, params={"key": self.api_key}, json=payload)
+            response = await client.post(
+                url,
+                headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
+                json=payload,
+            )
         if response.status_code >= 400:
-            detail = self._extract_error(response)
-            raise AppError(f"Gemini API error: {detail}")
-
-        data = response.json()
-        content = (
-            data.get("candidates", [{}])[0]
-            .get("content", {})
-            .get("parts", [{}])[0]
-            .get("text", "{}")
-        )
-        return json.loads(content)
-
-    def _extract_error(self, response: httpx.Response) -> str:
+            raise AppError(f"Gemini request failed: {response.text}", response.status_code)
+        body = response.json()
         try:
-            payload = response.json()
-        except ValueError:
-            return response.text
-        error = payload.get("error")
-        if isinstance(error, dict):
-            return str(error.get("message") or error)
-        return str(payload)
+            text = body["candidates"][0]["content"]["parts"][0]["text"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise AppError("Gemini response did not include generated text") from exc
+        return extract_json_object(text or "{}")
+
+
+def create_llm_provider():
+    if settings.gemini_api_key:
+        return GeminiProvider()
+    return OpenAIProvider()

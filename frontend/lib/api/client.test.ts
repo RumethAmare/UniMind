@@ -20,14 +20,26 @@ describe("api client", () => {
     expect(headers.get("Authorization")).toBe("Bearer access-token");
   });
 
-  it("sends delete requests for chat sessions", async () => {
-    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+  it("refreshes an expired access token and retries once", async () => {
+    setTokens("expired-token", "refresh-token");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/auth/refresh")) {
+        return new Response(
+          JSON.stringify({ access_token: "new-token", refresh_token: "new-refresh", token_type: "bearer" }),
+          { status: 200 }
+        );
+      }
+      const calls = fetchMock.mock.calls.length;
+      return calls === 1
+        ? new Response(JSON.stringify({ detail: "expired" }), { status: 401 })
+        : new Response(JSON.stringify([]), { status: 200 });
+    });
     vi.stubGlobal("fetch", fetchMock);
 
-    await api.deleteChatSession("session-id");
+    await expect(api.listDocuments()).resolves.toEqual([]);
 
-    const call = fetchMock.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit];
-    expect(call[0]).toBe("/api/v1/chat/sessions/session-id");
-    expect(call[1].method).toBe("DELETE");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const retry = fetchMock.mock.calls[2] as unknown as [RequestInfo | URL, RequestInit];
+    expect((retry[1].headers as Headers).get("Authorization")).toBe("Bearer new-token");
   });
 });
